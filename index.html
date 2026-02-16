@@ -3,198 +3,156 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sphere Arena Game with Textures</title>
+<title>3D Sphere Arena</title>
 <style>
-  body {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    background: #222;
-  }
-  canvas {
-    display: block;
-    margin: 0 auto;
-    background: #444;
-  }
+  body { margin: 0; overflow: hidden; }
+  canvas { display: block; }
 </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
 <audio id="bgMusic" src="mingleboosted.mp3" loop autoplay></audio>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+// --- Scene Setup ---
+const scene = new THREE.Scene();
 
-const bgMusic = document.getElementById('bgMusic');
-window.addEventListener('click', () => bgMusic.play(), { once: true });
-window.addEventListener('touchstart', () => bgMusic.play(), { once: true });
+// Textured background
+const loader = new THREE.TextureLoader();
+loader.load('andy.gif', (texture) => {
+  scene.background = texture;
+});
+
+// Camera
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.set(0, 15, 30);
+
+// Renderer
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Lighting
+const light = new THREE.DirectionalLight(0xffffff,1);
+light.position.set(10,20,10);
+scene.add(light);
+scene.add(new THREE.AmbientLight(0x888888));
+
+// Platform
+const platformGeo = new THREE.BoxGeometry(50, 1, 50);
+const platformMat = new THREE.MeshStandardMaterial({color:0x555555});
+const platform = new THREE.Mesh(platformGeo, platformMat);
+platform.position.y = 0;
+scene.add(platform);
 
 // Load textures
-const playerImg = new Image();
-playerImg.src = 'andyside.jpg';
-
-const enemyFrames = [];
-for(let i=1;i<=4;i++){
-    const img = new Image();
-    img.src = `andyspin${i===1?'':i}.jpg`; // andyspin.jpg, andyspin2-4.jpg
-    enemyFrames.push(img);
-}
+const playerTexture = loader.load('andyside.jpg');
+const enemyTexture = loader.load('andyspin.jpg'); // assign different textures per enemy if you like
 
 // Player sphere
-const player = {
-    x: canvas.width/2,
-    y: canvas.height/2,
-    radius: 30,
-    vx: 0,
-    vy: 0,
-    speed: 5,
-    img: playerImg
-};
+const playerGeo = new THREE.SphereGeometry(2,32,32);
+const playerMat = new THREE.MeshStandardMaterial({map: playerTexture});
+const player = new THREE.Mesh(playerGeo, playerMat);
+player.position.y = 2;
+scene.add(player);
 
-// AI spheres
+// Enemies
 const enemies = [];
-const numEnemies = 5;
-for(let i=0; i<numEnemies; i++){
-    enemies.push({
-        x: Math.random()*(canvas.width-60)+30,
-        y: Math.random()*(canvas.height-60)+30,
-        radius: 30,
-        vx: 0,
-        vy: 0,
-        frame: Math.floor(Math.random()*enemyFrames.length),
-        img: enemyFrames[Math.floor(Math.random()*enemyFrames.length)]
-    });
+const enemyPositions = [
+  [-10,2,-10],[10,2,-10],[-10,2,10],[10,2,10]
+];
+for(let i=0;i<enemyPositions.length;i++){
+  const geo = new THREE.SphereGeometry(2,32,32);
+  const mat = new THREE.MeshStandardMaterial({map: loader.load(`andyspin${i+1}.jpg`)});
+  const enemy = new THREE.Mesh(geo, mat);
+  enemy.position.set(enemyPositions[i][0],2,enemyPositions[i][2]);
+  enemies.push(enemy);
+  scene.add(enemy);
 }
 
 // Goal
-const goal = {
-    x: canvas.width - 100,
-    y: canvas.height/2,
-    radius: 40,
-    color: 'gold'
-};
+const goalGeo = new THREE.BoxGeometry(4,1,4);
+const goalMat = new THREE.MeshStandardMaterial({color:0xffd700});
+const goal = new THREE.Mesh(goalGeo,goalMat);
+goal.position.set(0,0.5,20);
+scene.add(goal);
 
 // Controls
 const keys = {};
-window.addEventListener('keydown', e => keys[e.key] = true);
-window.addEventListener('keyup', e => keys[e.key] = false);
+window.addEventListener('keydown', e=>keys[e.key.toLowerCase()]=true);
+window.addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
 
-// Collision detection
-function collide(a,b){
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if(dist < a.radius + b.radius){
-        const angle = Math.atan2(dy, dx);
-        const totalVx = a.vx - b.vx;
-        const totalVy = a.vy - b.vy;
-        a.vx = -totalVx * 0.5;
-        a.vy = -totalVy * 0.5;
-        b.vx = totalVx * 0.5;
-        b.vy = totalVy * 0.5;
+let velocityY = 0;
+const gravity = -0.3;
+const speed = 0.3;
+const jumpPower = 0.8;
 
-        const overlap = a.radius + b.radius - dist;
-        a.x -= Math.cos(angle) * overlap/2;
-        a.y -= Math.sin(angle) * overlap/2;
-        b.x += Math.cos(angle) * overlap/2;
-        b.y += Math.sin(angle) * overlap/2;
-    }
+// Simple collision detection (spheres)
+function sphereCollision(a,b){
+  const dx = a.position.x - b.position.x;
+  const dy = a.position.y - b.position.y;
+  const dz = a.position.z - b.position.z;
+  const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+  return dist < 4; // radius sum 2+2
 }
 
-// Update player
-function updatePlayer(){
-    if(keys['ArrowUp']) player.vy = -player.speed;
-    else if(keys['ArrowDown']) player.vy = player.speed;
-    else player.vy = 0;
+// Game loop
+function animate(){
+  requestAnimationFrame(animate);
 
-    if(keys['ArrowLeft']) player.vx = -player.speed;
-    else if(keys['ArrowRight']) player.vx = player.speed;
-    else player.vx = 0;
+  // Player movement
+  if(keys['w']) player.position.z -= speed;
+  if(keys['s']) player.position.z += speed;
+  if(keys['a']) player.position.x -= speed;
+  if(keys['d']) player.position.x += speed;
 
-    player.x += player.vx;
-    player.y += player.vy;
-
-    player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
-    player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
-}
-
-// Update enemies
-function updateEnemies(){
-    for(let e of enemies){
-        // Move towards player
-        const dx = player.x - e.x;
-        const dy = player.y - e.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        e.vx = (dx/dist)*2;
-        e.vy = (dy/dist)*2;
-
-        e.x += e.vx;
-        e.y += e.vy;
-
-        // Bounce off walls
-        if(e.x < e.radius || e.x > canvas.width - e.radius) e.vx *= -1;
-        if(e.y < e.radius || e.y > canvas.height - e.radius) e.vy *= -1;
-
-        // Animate frame
-        e.frame = (e.frame+1)%enemyFrames.length;
-        e.img = enemyFrames[e.frame];
+  // Jump
+  if(keys[' ']){
+    if(player.position.y <= 2.01){ // on ground
+      velocityY = jumpPower;
     }
-}
+  }
+  velocityY += gravity;
+  player.position.y += velocityY;
+  if(player.position.y < 2){ player.position.y = 2; velocityY=0; }
 
-// Draw sphere with texture
-function drawSphereTex(s){
-    if(s.img.complete){
-        ctx.drawImage(s.img, s.x - s.radius, s.y - s.radius, s.radius*2, s.radius*2);
-    } else {
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.radius, 0, Math.PI*2);
-        ctx.fillStyle = s.color || 'white';
-        ctx.fill();
-        ctx.closePath();
+  // Enemy simple AI: move toward player
+  for(let e of enemies){
+    const dx = player.position.x - e.position.x;
+    const dz = player.position.z - e.position.z;
+    const dist = Math.sqrt(dx*dx + dz*dz);
+    if(dist>0.1){
+      e.position.x += (dx/dist)*0.1;
+      e.position.z += (dz/dist)*0.1;
     }
-}
+  }
 
-// Main game loop
-function gameLoop(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    // Draw goal
-    ctx.beginPath();
-    ctx.arc(goal.x, goal.y, goal.radius,0,Math.PI*2);
-    ctx.fillStyle = goal.color;
-    ctx.fill();
-    ctx.closePath();
-
-    updatePlayer();
-    updateEnemies();
-
-    // Check collisions
-    for(let e of enemies) collide(player,e);
-    for(let i=0;i<enemies.length;i++){
-        for(let j=i+1;j<enemies.length;j++){
-            collide(enemies[i], enemies[j]);
-        }
+  // Collision player-enemies
+  for(let e of enemies){
+    if(sphereCollision(player,e)){
+      // simple bounce
+      const dirX = player.position.x - e.position.x;
+      const dirZ = player.position.z - e.position.z;
+      player.position.x += dirX*0.2;
+      player.position.z += dirZ*0.2;
+      e.position.x -= dirX*0.2;
+      e.position.z -= dirZ*0.2;
     }
+  }
 
-    // Draw everything
-    drawSphereTex(player);
-    for(let e of enemies) drawSphereTex(e);
+  // Check win
+  if(
+    Math.abs(player.position.x - goal.position.x)<3 &&
+    Math.abs(player.position.z - goal.position.z)<3
+  ){
+    alert("You Win!");
+    window.location.reload();
+  }
 
-    // Check win
-    const dx = goal.x - player.x;
-    const dy = goal.y - player.y;
-    if(Math.sqrt(dx*dx + dy*dy) < goal.radius + player.radius){
-        alert('You Win!');
-        window.location.reload();
-    }
-
-    requestAnimationFrame(gameLoop);
+  renderer.render(scene,camera);
 }
-
-gameLoop();
+animate();
 </script>
 </body>
 </html>
