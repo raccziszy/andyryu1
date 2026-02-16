@@ -3,44 +3,51 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>3D Sphere Arena</title>
+<title>3D Sphere Arena with Hitboxes</title>
 <style>
-  body { margin: 0; overflow: hidden; }
-  canvas { display: block; }
+  body { margin:0; overflow:hidden; }
+  canvas { display:block; }
+  #instructions {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    color:white; text-align:center; font-family:sans-serif;
+    font-size:24px; background: rgba(0,0,0,0.5); padding:20px;
+  }
 </style>
 </head>
 <body>
+<div id="instructions">Click to start. WASD + Space to move/jump. Move mouse to look around.</div>
 <audio id="bgMusic" src="mingleboosted.mp3" loop autoplay></audio>
 <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
-// --- Scene Setup ---
 const scene = new THREE.Scene();
-
-// Textured background
 const loader = new THREE.TextureLoader();
-loader.load('andy.gif', (texture) => {
-  scene.background = texture;
-});
+loader.load('andy.gif', tex => scene.background = tex);
 
-// Camera
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-camera.position.set(0, 15, 30);
-
-// Renderer
+// Camera & renderer
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight,0.1,1000);
 const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
+// PointerLockControls for mouse camera
+const controls = new THREE.PointerLockControls(camera, document.body);
+document.getElementById('instructions').addEventListener('click', () => {
+    controls.lock();
+    document.getElementById('instructions').style.display='none';
+});
+scene.add(controls.getObject());
+
 // Lighting
-const light = new THREE.DirectionalLight(0xffffff,1);
-light.position.set(10,20,10);
-scene.add(light);
-scene.add(new THREE.AmbientLight(0x888888));
+scene.add(new THREE.AmbientLight(0xffffff,0.6));
+const dirLight = new THREE.DirectionalLight(0xffffff,1);
+dirLight.position.set(50,100,50);
+scene.add(dirLight);
 
 // Platform
-const platformGeo = new THREE.BoxGeometry(50, 1, 50);
+const platformSize = 200;
+const platformGeo = new THREE.BoxGeometry(platformSize,2,platformSize);
 const platformMat = new THREE.MeshStandardMaterial({color:0x555555});
 const platform = new THREE.Mesh(platformGeo, platformMat);
 platform.position.y = 0;
@@ -48,34 +55,44 @@ scene.add(platform);
 
 // Load textures
 const playerTexture = loader.load('andyside.jpg');
-const enemyTexture = loader.load('andyspin.jpg'); // assign different textures per enemy if you like
+const enemyTextures = [
+    loader.load('andyspin.jpg'),
+    loader.load('andyspin2.jpg'),
+    loader.load('andyspin3.jpg'),
+    loader.load('andyspin4.jpg')
+];
 
-// Player sphere
-const playerGeo = new THREE.SphereGeometry(2,32,32);
-const playerMat = new THREE.MeshStandardMaterial({map: playerTexture});
+// Player
+const playerRadius = 3;
+const playerGeo = new THREE.SphereGeometry(playerRadius,32,32);
+const playerMat = new THREE.MeshStandardMaterial({map:playerTexture});
 const player = new THREE.Mesh(playerGeo, playerMat);
-player.position.y = 2;
+player.position.set(0,playerRadius,0);
 scene.add(player);
+player.velocity = new THREE.Vector3();
 
 // Enemies
 const enemies = [];
+const enemyRadius = 3;
 const enemyPositions = [
-  [-10,2,-10],[10,2,-10],[-10,2,10],[10,2,10]
+    [-50,enemyRadius,-50],[50,enemyRadius,-50],
+    [-50,enemyRadius,50],[50,enemyRadius,50]
 ];
 for(let i=0;i<enemyPositions.length;i++){
-  const geo = new THREE.SphereGeometry(2,32,32);
-  const mat = new THREE.MeshStandardMaterial({map: loader.load(`andyspin${i+1}.jpg`)});
-  const enemy = new THREE.Mesh(geo, mat);
-  enemy.position.set(enemyPositions[i][0],2,enemyPositions[i][2]);
-  enemies.push(enemy);
-  scene.add(enemy);
+    const geo = new THREE.SphereGeometry(enemyRadius,32,32);
+    const mat = new THREE.MeshStandardMaterial({map:enemyTextures[i]});
+    const enemy = new THREE.Mesh(geo, mat);
+    enemy.position.set(enemyPositions[i][0],enemyRadius,enemyPositions[i][2]);
+    enemy.velocity = new THREE.Vector3();
+    enemies.push(enemy);
+    scene.add(enemy);
 }
 
 // Goal
-const goalGeo = new THREE.BoxGeometry(4,1,4);
+const goalGeo = new THREE.BoxGeometry(6,1,6);
 const goalMat = new THREE.MeshStandardMaterial({color:0xffd700});
 const goal = new THREE.Mesh(goalGeo,goalMat);
-goal.position.set(0,0.5,20);
+goal.position.set(0,0.5,platformSize/2-10);
 scene.add(goal);
 
 // Controls
@@ -83,74 +100,96 @@ const keys = {};
 window.addEventListener('keydown', e=>keys[e.key.toLowerCase()]=true);
 window.addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
 
+// Movement physics
 let velocityY = 0;
-const gravity = -0.3;
-const speed = 0.3;
-const jumpPower = 0.8;
+const gravity = -0.4;
+const speed = 0.6;
+const jumpPower = 1.2;
 
-// Simple collision detection (spheres)
-function sphereCollision(a,b){
-  const dx = a.position.x - b.position.x;
-  const dy = a.position.y - b.position.y;
-  const dz = a.position.z - b.position.z;
-  const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-  return dist < 4; // radius sum 2+2
+// Elastic collision between two spheres
+function resolveCollision(a, b, radiusSum){
+    const delta = new THREE.Vector3().subVectors(a.position, b.position);
+    const dist = delta.length();
+    if(dist < radiusSum && dist>0){
+        const overlap = radiusSum - dist;
+
+        // Separate spheres along collision line
+        delta.normalize();
+        a.position.addScaledVector(delta, overlap/2);
+        b.position.addScaledVector(delta, -overlap/2);
+
+        // Simple elastic bounce
+        const relativeVelocity = new THREE.Vector3().subVectors(a.velocity, b.velocity);
+        const impactSpeed = relativeVelocity.dot(delta);
+        if(impactSpeed<0){
+            const impulse = delta.multiplyScalar(impactSpeed);
+            a.velocity.sub(impulse.multiplyScalar(0.5));
+            b.velocity.add(impulse.multiplyScalar(0.5));
+        }
+    }
 }
 
-// Game loop
+// Animate loop
 function animate(){
-  requestAnimationFrame(animate);
+    requestAnimationFrame(animate);
 
-  // Player movement
-  if(keys['w']) player.position.z -= speed;
-  if(keys['s']) player.position.z += speed;
-  if(keys['a']) player.position.x -= speed;
-  if(keys['d']) player.position.x += speed;
+    // WASD movement
+    const dir = new THREE.Vector3();
+    if(keys['w']) dir.z -=1;
+    if(keys['s']) dir.z +=1;
+    if(keys['a']) dir.x -=1;
+    if(keys['d']) dir.x +=1;
+    dir.applyEuler(camera.rotation).multiplyScalar(speed);
+    player.velocity.x = dir.x;
+    player.velocity.z = dir.z;
 
-  // Jump
-  if(keys[' ']){
-    if(player.position.y <= 2.01){ // on ground
-      velocityY = jumpPower;
+    // Jump & gravity
+    if(keys[' '] && player.position.y<=playerRadius+0.01) velocityY = jumpPower;
+    velocityY += gravity;
+    player.position.y += velocityY;
+    if(player.position.y<playerRadius){ player.position.y = playerRadius; velocityY=0; }
+
+    // Update player position
+    player.position.add(player.velocity);
+
+    // Enemy AI
+    for(let e of enemies){
+        const toPlayer = new THREE.Vector3().subVectors(player.position, e.position);
+        toPlayer.y=0;
+        if(toPlayer.length()>0.1){
+            toPlayer.normalize().multiplyScalar(0.2);
+            e.velocity.x = toPlayer.x;
+            e.velocity.z = toPlayer.z;
+        }
+        e.position.add(e.velocity);
     }
-  }
-  velocityY += gravity;
-  player.position.y += velocityY;
-  if(player.position.y < 2){ player.position.y = 2; velocityY=0; }
 
-  // Enemy simple AI: move toward player
-  for(let e of enemies){
-    const dx = player.position.x - e.position.x;
-    const dz = player.position.z - e.position.z;
-    const dist = Math.sqrt(dx*dx + dz*dz);
-    if(dist>0.1){
-      e.position.x += (dx/dist)*0.1;
-      e.position.z += (dz/dist)*0.1;
+    // Collision resolution
+    // Player vs enemies
+    for(let e of enemies) resolveCollision(player,e,playerRadius+enemyRadius);
+    // Enemy vs enemy
+    for(let i=0;i<enemies.length;i++){
+        for(let j=i+1;j<enemies.length;j++){
+            resolveCollision(enemies[i],enemies[j],enemyRadius*2);
+        }
     }
-  }
 
-  // Collision player-enemies
-  for(let e of enemies){
-    if(sphereCollision(player,e)){
-      // simple bounce
-      const dirX = player.position.x - e.position.x;
-      const dirZ = player.position.z - e.position.z;
-      player.position.x += dirX*0.2;
-      player.position.z += dirZ*0.2;
-      e.position.x -= dirX*0.2;
-      e.position.z -= dirZ*0.2;
+    // Keep player/enemies inside platform
+    const half = platformSize/2 - playerRadius;
+    player.position.x = Math.max(-half, Math.min(half, player.position.x));
+    player.position.z = Math.max(-half, Math.min(half, player.position.z));
+    for(let e of enemies){
+        e.position.x = Math.max(-half, Math.min(half, e.position.x));
+        e.position.z = Math.max(-half, Math.min(half, e.position.z));
     }
-  }
 
-  // Check win
-  if(
-    Math.abs(player.position.x - goal.position.x)<3 &&
-    Math.abs(player.position.z - goal.position.z)<3
-  ){
-    alert("You Win!");
-    window.location.reload();
-  }
+    // Check win
+    if(Math.abs(player.position.x-goal.position.x)<3 && Math.abs(player.position.z-goal.position.z)<3){
+        alert("You Win!");
+        window.location.reload();
+    }
 
-  renderer.render(scene,camera);
+    renderer.render(scene,camera);
 }
 animate();
 </script>
