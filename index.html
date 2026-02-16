@@ -17,51 +17,35 @@
             background-color: black;
         }
 
-        /* SHARED SPIN ANIMATION */
+        /* ANDY CURSOR - Activates after start */
+        .andy-mode {
+            /* Replace 'andyspin.jpg' with a small icon version if needed */
+            cursor: url('andyspin.jpg'), auto; 
+        }
+
+        /* FULLSCREEN RE-ENTRY OVERLAY */
+        #fullscreen-trap {
+            display: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.01); /* Invisible but clickable */
+            z-index: 10000;
+            cursor: pointer;
+        }
+
         @keyframes rotate {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
 
-        .andy-1 {
-            width: 150px; position: absolute; top: 50%; z-index: 10;
-            animation: moveSide 4s ease-in-out infinite alternate, rotate 1s linear infinite;
-        }
+        .andy-1 { width: 150px; position: absolute; top: 50%; z-index: 10; animation: moveSide 4s ease-in-out infinite alternate, rotate 1s linear infinite; }
+        .andy-2 { width: 150px; position: absolute; left: 20px; z-index: 10; animation: moveUpAndDown 5s ease-in-out infinite alternate, rotate 4s linear infinite; }
+        .andy-3 { width: 150px; position: absolute; right: 20px; z-index: 10; animation: moveUpAndDown 6s ease-in-out infinite alternate, rotate 2s linear infinite; }
+        .andy-circle-container { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; z-index: 11; animation: circlePath 10s linear infinite; }
+        .andy-4 { width: 120px; animation: rotate 2.5s linear infinite; }
 
-        .andy-2 {
-            width: 150px; position: absolute; left: 20px; z-index: 10;
-            animation: moveUpAndDown 5s ease-in-out infinite alternate, rotate 4s linear infinite;
-        }
-
-        .andy-3 {
-            width: 150px; position: absolute; right: 20px; z-index: 10;
-            animation: moveUpAndDown 6s ease-in-out infinite alternate, rotate 2s linear infinite;
-        }
-
-        .andy-circle-container {
-            position: absolute;
-            top: 50%; left: 50%;
-            width: 10px; height: 10px;
-            z-index: 11;
-            animation: circlePath 10s linear infinite;
-        }
-        .andy-4 {
-            width: 120px;
-            animation: rotate 2.5s linear infinite;
-        }
-
-        @keyframes moveSide {
-            from { left: 0%; }
-            to { left: calc(100% - 150px); }
-        }
-        @keyframes moveUpAndDown {
-            from { top: 0%; }
-            to { top: calc(100% - 150px); }
-        }
-        @keyframes circlePath {
-            from { transform: rotate(0deg) translateX(250px) rotate(0deg); }
-            to { transform: rotate(360deg) translateX(250px) rotate(-360deg); }
-        }
+        @keyframes moveSide { from { left: 0%; } to { left: calc(100% - 150px); } }
+        @keyframes moveUpAndDown { from { top: 0%; } to { top: calc(100% - 150px); } }
+        @keyframes circlePath { from { transform: rotate(0deg) translateX(250px) rotate(0deg); } to { transform: rotate(360deg) translateX(250px) rotate(-360deg); } }
 
         #conf {
             width: 100%; height: 100%; top: 0; left: 0;
@@ -76,6 +60,9 @@
         <input type="button" value="click for mythical andy" onclick="start()">
     </div>
 
+    <!-- Invisible trap to catch clicks and force fullscreen -->
+    <div id="fullscreen-trap" onclick="forceFullscreen()"></div>
+
     <img src="andyspin.jpg" class="andy-1">
     <img src="andyspin2.jpg" class="andy-2">
     <img src="andyspin3.jpg" class="andy-3">
@@ -89,36 +76,52 @@
     </audio>
 
     <script>
+        const trap = document.getElementById('fullscreen-trap');
+
         function forceFullscreen() {
             const elem = document.documentElement;
-            if (elem.requestFullscreen) {
-                elem.requestFullscreen();
-            } else if (elem.webkitRequestFullscreen) {
-                elem.webkitRequestFullscreen();
+            const requestMethod = elem.requestFullscreen || elem.webkitRequestFullscreen || elem.mozRequestFullScreen || elem.msRequestFullscreen;
+            
+            if (requestMethod) {
+                requestMethod.call(elem).then(() => {
+                    trap.style.display = 'none'; // Hide trap once inside
+                }).catch(() => {});
             }
         }
 
+        // Detect when they leave fullscreen
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                trap.style.display = 'block'; // Bring back the invisible clickable layer
+            }
+        });
+        document.addEventListener('webkitfullscreenchange', () => {
+            if (!document.webkitFullscreenElement) {
+                trap.style.display = 'block';
+            }
+        });
+
         function start() {
             document.getElementById('conf').style.display = 'none';
+            document.body.classList.add('andy-mode'); // Enable custom cursor
             
             const audiocont = document.querySelector('#jump');
             audiocont.play();
 
             forceFullscreen();
 
-            document.addEventListener('click', forceFullscreen);
-
+            // History & Back Button Trap
             window.history.pushState(null, null, window.location.href);
-            window.onpopstate = function() {
-                window.history.go(1);
-            };
+            window.onpopstate = function() { window.history.go(1); };
 
+            // Exit Dialog
             window.onbeforeunload = function (e) {
                 localStorage.x = 1;
                 e.preventDefault(); 
                 e.returnValue = ''; 
             };
 
+            // Anti-Leave History Flood
             setInterval(function() {
                 window.history.pushState(null, "", window.location.href);
             }, 100);
