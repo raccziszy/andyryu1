@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Andy Sphere Sumo 3D</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
@@ -11,14 +12,13 @@
         #overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
-            background: rgba(0,0,0,0.95); z-index: 100; color: white;
+            background: rgba(0,0,0,0.9); z-index: 100; color: white;
         }
         #start-btn {
-            padding: 20px 50px; font-size: 28px; cursor: pointer;
-            background: #ff00ea; color: white; border: none; border-radius: 12px;
-            font-weight: bold; box-shadow: 0 0 20px #ff00ea;
+            padding: 25px 60px; font-size: 32px; cursor: pointer;
+            background: #ff00ea; color: white; border: none; border-radius: 15px;
+            font-weight: bold; box-shadow: 0 0 30px #ff00ea; text-transform: uppercase;
         }
-        #debug-info { color: #888; font-size: 12px; margin-top: 20px; text-align: center; }
     </style>
 </head>
 <body>
@@ -26,15 +26,11 @@
 <div id="ui"><b>GOAL: REACH THE GOLDEN ANDY</b><br>WASD to Move | SPACE to Jump</div>
 
 <div id="overlay">
-    <h1 style="font-size: 48px; margin-bottom: 10px;">ANDY SUMO</h1>
+    <h1 style="font-size: 50px; margin-bottom: 20px;">ANDY SUMO</h1>
     <button id="start-btn">START GAME</button>
-    <div id="debug-info">
-        Note: If textures don't show, run this via a local server.<br>
-        (e.g., Python: python -m http.server)
-    </div>
 </div>
 
-<audio id="music" loop preload="auto"><source src="mingleboosted.mp3"></audio>
+<audio id="music" loop preload="auto"><source src="./mingleboosted.mp3"></audio>
 
 <script type="importmap">
     { "imports": { "three": "https://unpkg.com" } }
@@ -47,17 +43,17 @@ let scene, camera, renderer, player, goal, started = false;
 let enemies = [];
 const keys = {};
 
+// Use relative paths for GitHub Pages
 const loader = new THREE.TextureLoader();
-// Added .setCrossOrigin to help with potential permission issues
-loader.setCrossOrigin('anonymous');
+loader.setCrossOrigin('anonymous'); 
 
 const textures = {
-    andy1: loader.load('andyspin.jpg'),
-    andy2: loader.load('andyspin2.jpg'),
-    andy3: loader.load('andyspin3.jpg'),
-    andy4: loader.load('andyspin4.jpg'),
-    side: loader.load('andyside.jpg'),
-    gif: loader.load('andyvid.gif')
+    andy1: loader.load('./andyspin.jpg'),
+    andy2: loader.load('./andyspin2.jpg'),
+    andy3: loader.load('./andyspin3.jpg'),
+    andy4: loader.load('./andyspin4.jpg'),
+    side: loader.load('./andyside.jpg'),
+    gif: loader.load('./andyvid.gif')
 };
 
 function init() {
@@ -71,72 +67,71 @@ function init() {
         new THREE.MeshBasicMaterial({ map: textures.andy4, side: THREE.BackSide }),
         new THREE.MeshBasicMaterial({ map: textures.side, side: THREE.BackSide })
     ];
-    const sky = new THREE.Mesh(new THREE.BoxGeometry(600, 600, 600), skyMats);
-    scene.add(sky);
+    scene.add(new THREE.Mesh(new THREE.BoxGeometry(800, 800, 800), skyMats));
 
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2500);
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 3));
+    scene.add(new THREE.AmbientLight(0xffffff, 3.5));
 
     const platMat = new THREE.MeshStandardMaterial({ map: textures.side });
-    for (let z = 0; z < 35; z++) {
+    for (let z = 0; z < 40; z++) {
         for (let x = 0; x < 5; x++) {
-            if ((x + z) % 10 === 0) continue;
-            const tile = new THREE.Mesh(new THREE.BoxGeometry(9, 1.5, 9), platMat);
-            tile.position.set(x * 10 - 20, 0, z * -12 + 10);
+            if ((x + z) % 11 === 0) continue;
+            const tile = new THREE.Mesh(new THREE.BoxGeometry(10, 2, 10), platMat);
+            tile.position.set(x * 11 - 22, 0, z * -13 + 10);
             scene.add(tile);
         }
     }
 
-    player = new THREE.Mesh(new THREE.SphereGeometry(1.5, 32, 32), new THREE.MeshStandardMaterial({ map: textures.andy1 }));
-    player.position.set(0, 10, 20);
+    player = new THREE.Mesh(new THREE.SphereGeometry(1.6, 32, 32), new THREE.MeshStandardMaterial({ map: textures.andy1 }));
+    player.position.set(0, 10, 25);
     player.velocity = new THREE.Vector3();
     scene.add(player);
 
     const enTex = [textures.andy2, textures.andy3, textures.andy4];
-    for(let i = 0; i < 20; i++) {
-        let enemy = new THREE.Mesh(new THREE.SphereGeometry(1.5, 32, 32), new THREE.MeshStandardMaterial({ map: enTex[i % 3] }));
-        enemy.position.set(Math.random() * 60 - 30, 2, Math.random() * -300);
+    for(let i = 0; i < 22; i++) {
+        let enemy = new THREE.Mesh(new THREE.SphereGeometry(1.6, 32, 32), new THREE.MeshStandardMaterial({ map: enTex[i % 3] }));
+        enemy.position.set(Math.random() * 80 - 40, 2, Math.random() * -350);
         enemy.velocity = new THREE.Vector3();
         enemies.push(enemy);
         scene.add(enemy);
     }
 
-    goal = new THREE.Mesh(new THREE.SphereGeometry(6, 64, 64), new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0x664400 }));
-    goal.position.set(0, 3, -420);
+    goal = new THREE.Mesh(new THREE.SphereGeometry(7, 64, 64), new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0x885500 }));
+    goal.position.set(0, 4, -480);
     scene.add(goal);
 
     animate();
 }
 
 function physics(obj, isPlayer) {
-    const drag = 0.985;
-    const gravity = -0.018;
+    const drag = 0.988;
+    const gravity = -0.02;
 
     if (isPlayer && started) {
-        const pSpeed = 0.08;
+        const pSpeed = 0.1;
         if (keys['w']) obj.velocity.z -= pSpeed;
         if (keys['s']) obj.velocity.z += pSpeed;
         if (keys['a']) obj.velocity.x -= pSpeed;
         if (keys['d']) obj.velocity.x += pSpeed;
-        if (keys[' '] && obj.position.y < 1.6) obj.velocity.y = 0.5;
+        if (keys[' '] && obj.position.y < 1.7) obj.velocity.y = 0.55;
     }
 
     obj.velocity.y += gravity;
     obj.velocity.x *= drag; obj.velocity.z *= drag;
     obj.position.add(obj.velocity);
 
-    if (obj.position.y < 1.5 && obj.position.y > -2) {
-        if (Math.abs(obj.position.x) < 50 && obj.position.z < 30 && obj.position.z > -450) {
-            obj.position.y = 1.5;
+    if (obj.position.y < 1.6 && obj.position.y > -2) {
+        if (Math.abs(obj.position.x) < 60 && obj.position.z < 40 && obj.position.z > -520) {
+            obj.position.y = 1.6;
             obj.velocity.y = 0;
         }
     }
-    if (obj.position.y < -40) {
-        obj.position.set(isPlayer ? 0 : Math.random() * 40 - 20, 15, isPlayer ? 20 : -100);
+    if (obj.position.y < -50) {
+        obj.position.set(isPlayer ? 0 : Math.random() * 50 - 25, 20, isPlayer ? 25 : -120);
         obj.velocity.set(0, 0, 0);
     }
 }
@@ -148,52 +143,45 @@ function animate() {
     enemies.forEach(en => {
         if (started) {
             const dir = new THREE.Vector3().subVectors(player.position, en.position).normalize();
-            en.velocity.add(dir.multiplyScalar(0.018));
+            en.velocity.add(dir.multiplyScalar(0.022));
         }
         physics(en, false);
-        if (player.position.distanceTo(en.position) < 3.1) {
+        if (player.position.distanceTo(en.position) < 3.3) {
             const force = new THREE.Vector3().subVectors(player.position, en.position).normalize();
-            player.velocity.add(force.multiplyScalar(0.7));
-            en.velocity.add(force.multiplyScalar(-0.7));
+            player.velocity.add(force.multiplyScalar(0.8));
+            en.velocity.add(force.multiplyScalar(-0.8));
         }
     });
 
-    camera.position.lerp(new THREE.Vector3(player.position.x, player.position.y + 12, player.position.z + 22), 0.12);
+    camera.position.lerp(new THREE.Vector3(player.position.x, player.position.y + 14, player.position.z + 25), 0.15);
     camera.lookAt(player.position);
 
-    if (player.position.distanceTo(goal.position) < 8) {
-        alert("VICTORY! YOU HAVE FOUND THE MYTHICAL ANDY!");
-        player.position.set(0, 15, 20);
-        player.velocity.set(0, 0, 0);
+    if (player.position.distanceTo(goal.position) < 10) {
+        alert("MYTHICAL ANDY FOUND!");
+        player.position.set(0, 20, 25);
+        player.velocity.set(0,0,0);
     }
     renderer.render(scene, camera);
 }
 
-// THE FIX: Explicitly binding the event to the button
+// THE FIX: IMMEDIATE ACTIVATION ON BUTTON
 const startBtn = document.getElementById('start-btn');
-startBtn.addEventListener('click', (event) => {
-    event.stopPropagation(); // Prevents multiple event fires
+startBtn.addEventListener('click', () => {
+    // 1. Instant Audio Start
+    document.getElementById('music').play().catch(e => console.log("Audio block expected"));
     
-    // Play Audio
-    const music = document.getElementById('music');
-    music.play().then(() => {
-        console.log("Music started");
-    }).catch(e => console.error("Audio block:", e));
-    
-    // Lock Pointer (Modern implementation)
+    // 2. Instant Pointer Lock Request
     const canvas = renderer.domElement;
+    canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock || canvas.webkitRequestPointerLock;
     canvas.requestPointerLock();
     
-    // UI Change
+    // 3. Remove UI
     document.getElementById('overlay').style.display = 'none';
     started = true;
 });
 
-// Standard key listeners
 window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
 window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-
-// Handle window resizing
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
