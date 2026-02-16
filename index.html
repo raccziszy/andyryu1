@@ -1,190 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>3D Sphere Arena</title>
-<style>
-  body { margin:0; overflow:hidden; }
-  canvas { display:block; }
-  #instructions {
-    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-    color:white; text-align:center; font-family:sans-serif;
-    font-size:24px; background: rgba(0,0,0,0.5); padding:20px; cursor:pointer;
-  }
-</style>
-</head>
-<body>
-<div id="instructions">Click to start. WASD + Space to move/jump. Move mouse to look around.</div>
-<audio id="bgMusic" src="mingleboosted.mp3" loop autoplay></audio>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/PointerLockControls.js"></script>
+<div id="instructions">Press any key to start. WASD + Space to move/jump. Move mouse to look around.</div>
 
 <script>
-const scene = new THREE.Scene();
-const loader = new THREE.TextureLoader();
-loader.load('andyvid.gif', tex => scene.background = tex);
-
-// Camera & renderer
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight,0.1,1000);
-const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-// PointerLockControls
+// PointerLockControls for mouse camera
 const controls = new THREE.PointerLockControls(camera, document.body);
 const instructions = document.getElementById('instructions');
-instructions.addEventListener('click', () => controls.lock());
-controls.addEventListener('lock', () => instructions.style.display = 'none');
-controls.addEventListener('unlock', () => instructions.style.display = 'block');
+
+// Start game on any key press
+function startGame() {
+    controls.lock(); // request pointer lock
+    document.removeEventListener('keydown', startGame); // remove listener after starting
+}
+document.addEventListener('keydown', startGame);
+
+// Hide instructions when pointer lock is active
+controls.addEventListener('lock', () => instructions.style.display='none');
+
+// Optional: show instructions if pointer lock is lost
+controls.addEventListener('unlock', () => instructions.style.display='block');
+
 scene.add(controls.getObject());
-
-// Lighting
-scene.add(new THREE.AmbientLight(0xffffff,0.6));
-const dirLight = new THREE.DirectionalLight(0xffffff,1);
-dirLight.position.set(50,100,50);
-scene.add(dirLight);
-
-// Platform
-const platformSize = 200;
-const platformGeo = new THREE.BoxGeometry(platformSize,2,platformSize);
-const platformMat = new THREE.MeshStandardMaterial({color:0x555555});
-const platform = new THREE.Mesh(platformGeo, platformMat);
-platform.position.y = 0;
-scene.add(platform);
-
-// Textures
-const playerTexture = loader.load('andyside.jpg');
-const enemyTextures = [
-    loader.load('andyspin.jpg'),
-    loader.load('andyspin2.jpg'),
-    loader.load('andyspin3.jpg'),
-    loader.load('andyspin4.jpg')
-];
-
-// Player
-const playerRadius = 3;
-const playerGeo = new THREE.SphereGeometry(playerRadius,32,32);
-const playerMat = new THREE.MeshStandardMaterial({map:playerTexture});
-const player = new THREE.Mesh(playerGeo, playerMat);
-player.position.set(0,playerRadius,0);
-scene.add(player);
-player.velocity = new THREE.Vector3();
-
-// Enemies
-const enemies = [];
-const enemyRadius = 3;
-const enemyPositions = [
-    [-50,enemyRadius,-50],[50,enemyRadius,-50],
-    [-50,enemyRadius,50],[50,enemyRadius,50]
-];
-for(let i=0;i<enemyPositions.length;i++){
-    const geo = new THREE.SphereGeometry(enemyRadius,32,32);
-    const mat = new THREE.MeshStandardMaterial({map:enemyTextures[i]});
-    const enemy = new THREE.Mesh(geo, mat);
-    enemy.position.set(enemyPositions[i][0],enemyRadius,enemyPositions[i][2]);
-    enemy.velocity = new THREE.Vector3();
-    enemies.push(enemy);
-    scene.add(enemy);
-}
-
-// Goal
-const goalGeo = new THREE.BoxGeometry(6,1,6);
-const goalMat = new THREE.MeshStandardMaterial({color:0xffd700});
-const goal = new THREE.Mesh(goalGeo,goalMat);
-goal.position.set(0,0.5,platformSize/2-10);
-scene.add(goal);
-
-// Movement controls
-const keys = {};
-window.addEventListener('keydown', e=>keys[e.key.toLowerCase()]=true);
-window.addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
-
-let velocityY = 0;
-const gravity = -0.4;
-const speed = 0.6;
-const jumpPower = 1.2;
-
-// Collision resolution
-function resolveCollision(a,b,radiusSum){
-    const delta = new THREE.Vector3().subVectors(a.position,b.position);
-    const dist = delta.length();
-    if(dist<radiusSum && dist>0){
-        const overlap = radiusSum - dist;
-        delta.normalize();
-        a.position.addScaledVector(delta, overlap/2);
-        b.position.addScaledVector(delta, -overlap/2);
-        const relativeVelocity = new THREE.Vector3().subVectors(a.velocity,b.velocity);
-        const impactSpeed = relativeVelocity.dot(delta);
-        if(impactSpeed<0){
-            const impulse = delta.multiplyScalar(impactSpeed);
-            a.velocity.sub(impulse.multiplyScalar(0.5));
-            b.velocity.add(impulse.multiplyScalar(0.5));
-        }
-    }
-}
-
-// Animate loop
-function animate(){
-    requestAnimationFrame(animate);
-
-    // Player movement
-    const dir = new THREE.Vector3();
-    if(keys['w']) dir.z -=1;
-    if(keys['s']) dir.z +=1;
-    if(keys['a']) dir.x -=1;
-    if(keys['d']) dir.x +=1;
-    dir.applyEuler(camera.rotation).multiplyScalar(speed);
-    player.velocity.x = dir.x;
-    player.velocity.z = dir.z;
-
-    // Jump & gravity
-    if(keys[' '] && player.position.y<=playerRadius+0.01) velocityY = jumpPower;
-    velocityY += gravity;
-    player.position.y += velocityY;
-    if(player.position.y<playerRadius){ player.position.y = playerRadius; velocityY=0; }
-
-    // Update player
-    player.position.add(player.velocity);
-
-    // Enemy AI: move toward player
-    for(let e of enemies){
-        const toPlayer = new THREE.Vector3().subVectors(player.position,e.position);
-        toPlayer.y=0;
-        if(toPlayer.length()>0.1){
-            toPlayer.normalize().multiplyScalar(0.2);
-            e.velocity.x = toPlayer.x;
-            e.velocity.z = toPlayer.z;
-        }
-        e.position.add(e.velocity);
-    }
-
-    // Collision resolution
-    for(let e of enemies) resolveCollision(player,e,playerRadius+enemyRadius);
-    for(let i=0;i<enemies.length;i++){
-        for(let j=i+1;j<enemies.length;j++){
-            resolveCollision(enemies[i],enemies[j],enemyRadius*2);
-        }
-    }
-
-    // Keep spheres inside platform
-    const half = platformSize/2 - playerRadius;
-    player.position.x = Math.max(-half, Math.min(half, player.position.x));
-    player.position.z = Math.max(-half, Math.min(half, player.position.z));
-    for(let e of enemies){
-        e.position.x = Math.max(-half, Math.min(half, e.position.x));
-        e.position.z = Math.max(-half, Math.min(half, e.position.z));
-    }
-
-    // Check win
-    if(Math.abs(player.position.x-goal.position.x)<3 && Math.abs(player.position.z-goal.position.z)<3){
-        alert("You Win!");
-        window.location.reload();
-    }
-
-    renderer.render(scene,camera);
-}
-animate();
-</script>
-</body>
-</html>
