@@ -1,29 +1,35 @@
+html
 <!DOCTYPE html>
 <html>
 <head>
     <title>Andy Sphere Sumo 3D</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         #ui {
             position: absolute; top: 20px; left: 20px; color: #0f0;
-            text-shadow: 2px 2px 0px #000; font-size: 18px; pointer-events: none; z-index: 10;
+            text-shadow: 2px 2px 5px #000; font-size: 18px; pointer-events: none; z-index: 10;
         }
-        #click-prompt {
+        #overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            display: flex; justify-content: center; align-items: center;
-            color: white; font-size: 30px; z-index: 100; background: rgba(0,0,0,0.5);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.9); z-index: 100;
         }
+        button {
+            padding: 15px 40px; font-size: 24px; cursor: pointer;
+            background: #ff00ea; color: white; border: none; border-radius: 8px;
+            font-weight: bold; transition: 0.2s;
+        }
+        button:hover { transform: scale(1.1); background: #ff55ee; }
     </style>
 </head>
 <body>
 
-<div id="ui">
-    <b>GOAL: REACH THE GOLDEN ANDY</b><br>
-    CONTROLS: WASD + SPACE<br>
-    CLICK TO START MUSIC & MOVEMENT
-</div>
+<div id="ui"><b>GOAL: REACH THE GOLDEN ANDY</b><br>WASD to Move | SPACE to Jump</div>
 
-<div id="click-prompt">CLICK ANYWHERE TO START</div>
+<div id="overlay">
+    <h1 style="color: white; margin-bottom: 20px;">ANDY SUMO REALM</h1>
+    <button id="start-btn">START GAME</button>
+</div>
 
 <audio id="music" loop><source src="mingleboosted.mp3"></audio>
 
@@ -51,8 +57,8 @@ const textures = {
 function init() {
     scene = new THREE.Scene();
 
-    // THE ANDY SKYBOX
-    const skyMaterialArray = [
+    // FULL SKYBOX
+    const skyMats = [
         new THREE.MeshBasicMaterial({ map: textures.gif, side: THREE.BackSide }),
         new THREE.MeshBasicMaterial({ map: textures.andy2, side: THREE.BackSide }),
         new THREE.MeshBasicMaterial({ map: textures.gif, side: THREE.BackSide }),
@@ -60,133 +66,120 @@ function init() {
         new THREE.MeshBasicMaterial({ map: textures.andy4, side: THREE.BackSide }),
         new THREE.MeshBasicMaterial({ map: textures.side, side: THREE.BackSide })
     ];
-    const skybox = new THREE.Mesh(new THREE.BoxGeometry(300, 300, 300), skyMaterialArray);
-    scene.add(skybox);
+    scene.add(new THREE.Mesh(new THREE.BoxGeometry(500, 500, 500), skyMats));
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 2));
+    scene.add(new THREE.AmbientLight(0xffffff, 2.5));
 
-    // THE PLATFORM
-    const platformGroup = new THREE.Group();
+    // PLATFORM WITH HOLES
     const platMat = new THREE.MeshStandardMaterial({ map: textures.side });
-    for (let z = 0; z < 20; z++) {
+    for (let z = 0; z < 30; z++) {
         for (let x = 0; x < 5; x++) {
-            if ((x === 2 && z === 8) || (x === 1 && z === 15)) continue; // Holes
+            if ((x+z) % 9 === 0) continue; // Random holes
             const tile = new THREE.Mesh(new THREE.BoxGeometry(8, 1, 8), platMat);
-            tile.position.set(x * 8 - 16, 0, z * -8 + 10);
-            platformGroup.add(tile);
+            tile.position.set(x * 9 - 18, 0, z * -10 + 10);
+            scene.add(tile);
         }
     }
-    scene.add(platformGroup);
 
     // PLAYER
     player = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), new THREE.MeshStandardMaterial({ map: textures.andy1 }));
-    player.position.set(0, 2, 8);
+    player.position.set(0, 5, 15);
     player.velocity = new THREE.Vector3();
     scene.add(player);
 
-    // ENEMIES
-    const enemyTextures = [textures.andy2, textures.andy3, textures.andy4];
-    for(let i = 0; i < 12; i++) {
-        let enemy = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), new THREE.MeshStandardMaterial({ map: enemyTextures[i % 3] }));
-        enemy.position.set(Math.random() * 30 - 15, 2, Math.random() * -100);
+    // AI ENEMIES
+    const enTex = [textures.andy2, textures.andy3, textures.andy4];
+    for(let i = 0; i < 15; i++) {
+        let enemy = new THREE.Mesh(new THREE.SphereGeometry(1.3, 32, 32), new THREE.MeshStandardMaterial({ map: enTex[i % 3] }));
+        enemy.position.set(Math.random() * 40 - 20, 2, Math.random() * -200);
         enemy.velocity = new THREE.Vector3();
         enemies.push(enemy);
         scene.add(enemy);
     }
 
-    // GOLDEN ANDY GOAL
-    goal = new THREE.Mesh(new THREE.SphereGeometry(3, 32, 32), new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xffaa00 }));
-    goal.position.set(0, 2, -150);
+    // WIN GOAL
+    goal = new THREE.Mesh(new THREE.SphereGeometry(5, 32, 32), new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0x442200 }));
+    goal.position.set(0, 2, -280);
     scene.add(goal);
 
     animate();
 }
 
-function updatePhysics(obj, isPlayer) {
-    const drag = 0.97;
-    const gravity = -0.02;
+function physics(obj, isPlayer) {
+    const drag = 0.98;
+    const gravity = -0.015;
 
     if (isPlayer && started) {
-        const pSpeed = 0.05;
-        if (keys['w']) obj.velocity.z -= pSpeed;
-        if (keys['s']) obj.velocity.z += pSpeed;
-        if (keys['a']) obj.velocity.x -= pSpeed;
-        if (keys['d']) obj.velocity.x += pSpeed;
+        if (keys['w']) obj.velocity.z -= 0.07;
+        if (keys['s']) obj.velocity.z += 0.07;
+        if (keys['a']) obj.velocity.x -= 0.07;
+        if (keys['d']) obj.velocity.x += 0.07;
         if (keys[' '] && obj.position.y < 1.1) obj.velocity.y = 0.45;
     }
 
     obj.velocity.y += gravity;
-    obj.velocity.x *= drag;
-    obj.velocity.z *= drag;
+    obj.velocity.x *= drag; obj.velocity.z *= drag;
     obj.position.add(obj.velocity);
 
-    if (obj.position.y < 1 && obj.position.y > -1) {
-        if (Math.abs(obj.position.x) < 25 && obj.position.z < 15 && obj.position.z > -160) {
+    if (obj.position.y < 1 && obj.position.y > -2) {
+        if (Math.abs(obj.position.x) < 40 && obj.position.z < 25 && obj.position.z > -310) {
             obj.position.y = 1;
             obj.velocity.y = 0;
         }
     }
-
-    if (obj.position.y < -20) {
-        if (isPlayer) {
-            obj.position.set(0, 5, 8);
-            obj.velocity.set(0,0,0);
-        } else {
-            obj.position.set(Math.random() * 20 - 10, 5, -50);
-        }
+    if (obj.position.y < -30) {
+        obj.position.set(isPlayer ? 0 : Math.random()*20-10, 10, isPlayer ? 15 : -50);
+        obj.velocity.set(0,0,0);
     }
 }
 
 function animate() {
     requestAnimationFrame(animate);
-    updatePhysics(player, true);
+    physics(player, true);
 
     enemies.forEach(en => {
         if (started) {
-            const moveDir = new THREE.Vector3().subVectors(player.position, en.position).normalize();
-            en.velocity.add(moveDir.multiplyScalar(0.015));
+            const dir = new THREE.Vector3().subVectors(player.position, en.position).normalize();
+            en.velocity.add(dir.multiplyScalar(0.015));
         }
-        updatePhysics(en, false);
-
-        if (player.position.distanceTo(en.position) < 2.4) {
+        physics(en, false);
+        if (player.position.distanceTo(en.position) < 2.5) {
             const force = new THREE.Vector3().subVectors(player.position, en.position).normalize();
-            player.velocity.add(force.multiplyScalar(0.4));
-            en.velocity.add(force.multiplyScalar(-0.4));
+            player.velocity.add(force.multiplyScalar(0.6));
+            en.velocity.add(force.multiplyScalar(-0.6));
         }
     });
 
-    camera.position.lerp(new THREE.Vector3(player.position.x, player.position.y + 7, player.position.z + 14), 0.1);
+    camera.position.lerp(new THREE.Vector3(player.position.x, player.position.y + 10, player.position.z + 18), 0.1);
     camera.lookAt(player.position);
 
-    if (player.position.distanceTo(goal.position) < 4) {
-        alert("VICTORY! THE MYTHICAL ANDY IS YOURS!");
-        player.position.set(0, 5, 8);
+    if (player.position.distanceTo(goal.position) < 6) {
+        alert("YOU REACHED THE MYTHICAL ANDY!");
+        player.position.set(0, 10, 15);
     }
     renderer.render(scene, camera);
 }
 
-// Global click to start music/logic
-window.addEventListener('mousedown', () => {
-    if (!started) {
-        document.getElementById('music').play();
-        document.getElementById('click-prompt').style.display = 'none';
-        started = true;
-    }
+// START BUTTON LOGIC
+document.getElementById('start-btn').addEventListener('click', () => {
+    document.getElementById('music').play().catch(() => {});
+    
+    // Video Game Style: Lock mouse to window
+    const canvas = renderer.domElement;
+    canvas.requestPointerLock = canvas.requestPointerLock || canvas.webkitRequestPointerLock;
+    canvas.requestPointerLock();
+    
+    document.getElementById('overlay').style.display = 'none';
+    started = true;
 });
 
 window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
 window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
 init();
 </script>
 </body>
