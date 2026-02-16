@@ -19,7 +19,6 @@
             background-size: contain, auto 100%, auto 100%;
             position: relative;
             transition: transform 0.02s linear;
-            /* Apply the SVG filter here */
             filter: url(#chromatic-aberration);
         }
 
@@ -49,19 +48,21 @@
 </head>
 <body>
 
-    <!-- SVG Filter for Chromatic Aberration -->
+    <!-- Fixed SVG Filter for Subtle Edge Aberration -->
     <svg style="position: absolute; width: 0; height: 0;">
       <filter id="chromatic-aberration">
-        <feColorMatrix type="matrix" 
-          values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="red"/>
-        <feColorMatrix type="matrix" 
-          values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="green"/>
-        <feColorMatrix type="matrix" 
-          values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="blue"/>
-        <feOffset id="red-offset" in="red" dx="2" dy="0" result="red-offset"/>
-        <feOffset id="blue-offset" in="blue" dx="-2" dy="0" result="blue-offset"/>
-        <feBlend in="red-offset" in2="green" mode="screen" result="temp"/>
-        <feBlend in="temp" in2="blue-offset" mode="screen"/>
+        <!-- Separate the channels -->
+        <feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r"/>
+        <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
+        <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="b"/>
+        
+        <!-- Subtle offsets for the red and blue -->
+        <feOffset id="red-offset" in="r" dx="1" dy="0" result="r-shifted"/>
+        <feOffset id="blue-offset" in="b" dx="-1" dy="0" result="b-shifted"/>
+        
+        <!-- Recombine with Green as the base to maintain full color -->
+        <feBlend in="r-shifted" in2="g" mode="screen" result="rg"/>
+        <feBlend in="rg" in2="b-shifted" mode="screen"/>
       </filter>
     </svg>
 
@@ -82,21 +83,21 @@
     <script>
         const trap = document.getElementById('fullscreen-trap');
         const shaker = document.getElementById('shaker-box');
-        const redOffset = document.getElementById('red-offset');
-        const blueOffset = document.getElementById('blue-offset');
+        const rOff = document.getElementById('red-offset');
+        const bOff = document.getElementById('blue-offset');
 
         function startShaking() {
             setInterval(() => {
-                const intensity = 25;
+                const intensity = 15; // Slightly lowered for cleaner visibility
                 const x = (Math.random() - 0.5) * intensity;
                 const y = (Math.random() - 0.5) * intensity;
                 shaker.style.transform = `translate(${x}px, ${y}px)`;
 
-                // Randomize color split intensity for aberration
-                const split = Math.random() * 8;
-                redOffset.setAttribute('dx', split);
-                blueOffset.setAttribute('dx', -split);
-            }, 40); 
+                // Subtle edge split: only 2-4 pixels of offset max
+                const split = (Math.random() * 3) + 1;
+                rOff.setAttribute('dx', split);
+                bOff.setAttribute('dx', -split);
+            }, 50); 
         }
 
         async function forceFullscreen() {
