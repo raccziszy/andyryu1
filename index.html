@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Top-Down Shooter</title>
+<title>Top-Down Shooter with Images</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #111; overflow: hidden; font-family: sans-serif; color: #fff; }
@@ -21,11 +21,26 @@ const keys = {};
 document.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
 document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
+// Load images from repository
+const playerImg = new Image();
+playerImg.src = 'andyside.jpg';
+
+const enemyImgs = [
+    'andyspin.jpg',
+    'andyspin2.jpg',
+    'andyspin3.jpg'
+].map(src => {
+    const img = new Image();
+    img.src = src;
+    return img;
+});
+
 class Player {
     constructor() {
         this.x = canvas.width/2;
         this.y = canvas.height/2;
-        this.radius = 20;
+        this.width = 50;
+        this.height = 50;
         this.speed = 5;
         this.health = 100;
         this.bullets = [];
@@ -36,15 +51,13 @@ class Player {
         if(keys['arrowdown'] || keys['s']) this.y += this.speed;
         if(keys['arrowleft'] || keys['a']) this.x -= this.speed;
         if(keys['arrowright'] || keys['d']) this.x += this.speed;
-
-        // Stay in bounds
-        this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
-        this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
+        this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
+        this.y = Math.max(0, Math.min(canvas.height - this.height, this.y));
     }
     shoot() {
         if(this.shootCooldown <= 0) {
-            this.bullets.push(new Bullet(this.x, this.y, 0, -8));
-            this.shootCooldown = 10; // frames cooldown
+            this.bullets.push(new Bullet(this.x + this.width/2, this.y));
+            this.shootCooldown = 10;
         }
     }
     update() {
@@ -55,29 +68,20 @@ class Player {
         this.bullets = this.bullets.filter(b => !b.offscreen());
     }
     draw() {
-        ctx.fillStyle = '#0f0';
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
-        ctx.fill();
+        ctx.drawImage(playerImg, this.x, this.y, this.width, this.height);
         this.bullets.forEach(b => b.draw());
     }
 }
 
 class Bullet {
-    constructor(x, y, dx, dy) {
+    constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.dx = dx;
-        this.dy = dy;
         this.radius = 5;
+        this.speed = 8;
     }
-    update() {
-        this.x += this.dx;
-        this.y += this.dy;
-    }
-    offscreen() {
-        return this.x<0 || this.x>canvas.width || this.y<0 || this.y>canvas.height;
-    }
+    update() { this.y -= this.speed; }
+    offscreen() { return this.y < 0; }
     draw() {
         ctx.fillStyle = '#ff0';
         ctx.beginPath();
@@ -88,50 +92,36 @@ class Bullet {
 
 class Enemy {
     constructor() {
-        this.radius = 15 + Math.random()*10;
-        this.x = Math.random()*canvas.width;
-        this.y = -this.radius;
-        this.speed = 1 + Math.random()*2;
+        this.width = 50;
+        this.height = 50;
+        this.x = Math.random() * (canvas.width - this.width);
+        this.y = -this.height;
+        this.speed = 1 + Math.random() * 2;
+        this.img = enemyImgs[Math.floor(Math.random() * enemyImgs.length)];
     }
     update(player) {
         let angle = Math.atan2(player.y - this.y, player.x - this.x);
         this.x += Math.cos(angle) * this.speed;
         this.y += Math.sin(angle) * this.speed;
     }
-    draw() {
-        ctx.fillStyle = '#f00';
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
-        ctx.fill();
-    }
+    draw() { ctx.drawImage(this.img, this.x, this.y, this.width, this.height); }
 }
 
 let player = new Player();
 let enemies = [];
-let enemySpawnRate = 60; // frames
 let frameCount = 0;
 let score = 0;
 
 function detectCollisions() {
     enemies.forEach((e, i) => {
-        // Player collision
-        let dx = e.x - player.x;
-        let dy = e.y - player.y;
+        let dx = (e.x + e.width/2) - (player.x + player.width/2);
+        let dy = (e.y + e.height/2) - (player.y + player.height/2);
         let dist = Math.sqrt(dx*dx + dy*dy);
-        if(dist < e.radius + player.radius) {
-            player.health -= 10;
-            enemies.splice(i,1);
-        }
-        // Bullet collision
+        if(dist < 40) { player.health -= 10; enemies.splice(i,1); }
         player.bullets.forEach((b,j)=>{
-            let dx = e.x - b.x;
-            let dy = e.y - b.y;
-            let dist = Math.sqrt(dx*dx + dy*dy);
-            if(dist < e.radius + b.radius){
-                enemies.splice(i,1);
-                player.bullets.splice(j,1);
-                score += 10;
-            }
+            let dx = (e.x + e.width/2) - b.x;
+            let dy = (e.y + e.height/2) - b.y;
+            if(Math.sqrt(dx*dx + dy*dy) < 25){ enemies.splice(i,1); player.bullets.splice(j,1); score += 10; }
         });
     });
 }
@@ -142,26 +132,18 @@ function drawScore() {
 
 function gameLoop() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
-
     frameCount++;
-    if(frameCount % enemySpawnRate === 0) {
-        enemies.push(new Enemy());
-    }
+    if(frameCount % 60 === 0) enemies.push(new Enemy());
 
     player.update();
     player.draw();
-
-    enemies.forEach(e => {
-        e.update(player);
-        e.draw();
-    });
+    enemies.forEach(e => { e.update(player); e.draw(); });
 
     detectCollisions();
     drawScore();
 
-    if(player.health > 0) {
-        requestAnimationFrame(gameLoop);
-    } else {
+    if(player.health > 0) requestAnimationFrame(gameLoop);
+    else {
         ctx.fillStyle = '#fff';
         ctx.font = '50px sans-serif';
         ctx.fillText('GAME OVER', canvas.width/2 - 150, canvas.height/2);
