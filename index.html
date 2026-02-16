@@ -1,21 +1,174 @@
-<div id="instructions">Press any key to start. WASD + Space to move/jump. Move mouse to look around.</div>
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Top-Down Shooter</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; overflow: hidden; font-family: sans-serif; color: #fff; }
+  canvas { display: block; margin: 0 auto; background: #222; border: 2px solid #555; }
+  #scoreboard { position: absolute; top: 10px; left: 10px; font-size: 20px; }
+</style>
+</head>
+<body>
+<div id="scoreboard">Score: 0 | Health: 100</div>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
 <script>
-// PointerLockControls for mouse camera
-const controls = new THREE.PointerLockControls(camera, document.body);
-const instructions = document.getElementById('instructions');
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-// Start game on any key press
-function startGame() {
-    controls.lock(); // request pointer lock
-    document.removeEventListener('keydown', startGame); // remove listener after starting
+const keys = {};
+document.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+class Player {
+    constructor() {
+        this.x = canvas.width/2;
+        this.y = canvas.height/2;
+        this.radius = 20;
+        this.speed = 5;
+        this.health = 100;
+        this.bullets = [];
+        this.shootCooldown = 0;
+    }
+    move() {
+        if(keys['arrowup'] || keys['w']) this.y -= this.speed;
+        if(keys['arrowdown'] || keys['s']) this.y += this.speed;
+        if(keys['arrowleft'] || keys['a']) this.x -= this.speed;
+        if(keys['arrowright'] || keys['d']) this.x += this.speed;
+
+        // Stay in bounds
+        this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
+        this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
+    }
+    shoot() {
+        if(this.shootCooldown <= 0) {
+            this.bullets.push(new Bullet(this.x, this.y, 0, -8));
+            this.shootCooldown = 10; // frames cooldown
+        }
+    }
+    update() {
+        this.move();
+        if(keys[' ']) this.shoot();
+        if(this.shootCooldown > 0) this.shootCooldown--;
+        this.bullets.forEach(b => b.update());
+        this.bullets = this.bullets.filter(b => !b.offscreen());
+    }
+    draw() {
+        ctx.fillStyle = '#0f0';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+        ctx.fill();
+        this.bullets.forEach(b => b.draw());
+    }
 }
-document.addEventListener('keydown', startGame);
 
-// Hide instructions when pointer lock is active
-controls.addEventListener('lock', () => instructions.style.display='none');
+class Bullet {
+    constructor(x, y, dx, dy) {
+        this.x = x;
+        this.y = y;
+        this.dx = dx;
+        this.dy = dy;
+        this.radius = 5;
+    }
+    update() {
+        this.x += this.dx;
+        this.y += this.dy;
+    }
+    offscreen() {
+        return this.x<0 || this.x>canvas.width || this.y<0 || this.y>canvas.height;
+    }
+    draw() {
+        ctx.fillStyle = '#ff0';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
 
-// Optional: show instructions if pointer lock is lost
-controls.addEventListener('unlock', () => instructions.style.display='block');
+class Enemy {
+    constructor() {
+        this.radius = 15 + Math.random()*10;
+        this.x = Math.random()*canvas.width;
+        this.y = -this.radius;
+        this.speed = 1 + Math.random()*2;
+    }
+    update(player) {
+        let angle = Math.atan2(player.y - this.y, player.x - this.x);
+        this.x += Math.cos(angle) * this.speed;
+        this.y += Math.sin(angle) * this.speed;
+    }
+    draw() {
+        ctx.fillStyle = '#f00';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
 
-scene.add(controls.getObject());
+let player = new Player();
+let enemies = [];
+let enemySpawnRate = 60; // frames
+let frameCount = 0;
+let score = 0;
+
+function detectCollisions() {
+    enemies.forEach((e, i) => {
+        // Player collision
+        let dx = e.x - player.x;
+        let dy = e.y - player.y;
+        let dist = Math.sqrt(dx*dx + dy*dy);
+        if(dist < e.radius + player.radius) {
+            player.health -= 10;
+            enemies.splice(i,1);
+        }
+        // Bullet collision
+        player.bullets.forEach((b,j)=>{
+            let dx = e.x - b.x;
+            let dy = e.y - b.y;
+            let dist = Math.sqrt(dx*dx + dy*dy);
+            if(dist < e.radius + b.radius){
+                enemies.splice(i,1);
+                player.bullets.splice(j,1);
+                score += 10;
+            }
+        });
+    });
+}
+
+function drawScore() {
+    document.getElementById('scoreboard').textContent = `Score: ${score} | Health: ${player.health}`;
+}
+
+function gameLoop() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    frameCount++;
+    if(frameCount % enemySpawnRate === 0) {
+        enemies.push(new Enemy());
+    }
+
+    player.update();
+    player.draw();
+
+    enemies.forEach(e => {
+        e.update(player);
+        e.draw();
+    });
+
+    detectCollisions();
+    drawScore();
+
+    if(player.health > 0) {
+        requestAnimationFrame(gameLoop);
+    } else {
+        ctx.fillStyle = '#fff';
+        ctx.font = '50px sans-serif';
+        ctx.fillText('GAME OVER', canvas.width/2 - 150, canvas.height/2);
+    }
+}
+
+gameLoop();
+</script>
+</body>
+</html>
