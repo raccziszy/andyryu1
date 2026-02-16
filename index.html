@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>3D Sphere Arena with Hitboxes</title>
+<title>3D Sphere Arena</title>
 <style>
   body { margin:0; overflow:hidden; }
   canvas { display:block; }
   #instructions {
     position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
     color:white; text-align:center; font-family:sans-serif;
-    font-size:24px; background: rgba(0,0,0,0.5); padding:20px;
+    font-size:24px; background: rgba(0,0,0,0.5); padding:20px; cursor:pointer;
   }
 </style>
 </head>
@@ -31,12 +31,12 @@ const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// PointerLockControls for mouse camera
+// PointerLockControls
 const controls = new THREE.PointerLockControls(camera, document.body);
-document.getElementById('instructions').addEventListener('click', () => {
-    controls.lock();
-    document.getElementById('instructions').style.display='none';
-});
+const instructions = document.getElementById('instructions');
+instructions.addEventListener('click', () => controls.lock());
+controls.addEventListener('lock', () => instructions.style.display = 'none');
+controls.addEventListener('unlock', () => instructions.style.display = 'block');
 scene.add(controls.getObject());
 
 // Lighting
@@ -53,7 +53,7 @@ const platform = new THREE.Mesh(platformGeo, platformMat);
 platform.position.y = 0;
 scene.add(platform);
 
-// Load textures
+// Textures
 const playerTexture = loader.load('andyside.jpg');
 const enemyTextures = [
     loader.load('andyspin.jpg'),
@@ -95,31 +95,26 @@ const goal = new THREE.Mesh(goalGeo,goalMat);
 goal.position.set(0,0.5,platformSize/2-10);
 scene.add(goal);
 
-// Controls
+// Movement controls
 const keys = {};
 window.addEventListener('keydown', e=>keys[e.key.toLowerCase()]=true);
 window.addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
 
-// Movement physics
 let velocityY = 0;
 const gravity = -0.4;
 const speed = 0.6;
 const jumpPower = 1.2;
 
-// Elastic collision between two spheres
-function resolveCollision(a, b, radiusSum){
-    const delta = new THREE.Vector3().subVectors(a.position, b.position);
+// Collision resolution
+function resolveCollision(a,b,radiusSum){
+    const delta = new THREE.Vector3().subVectors(a.position,b.position);
     const dist = delta.length();
-    if(dist < radiusSum && dist>0){
+    if(dist<radiusSum && dist>0){
         const overlap = radiusSum - dist;
-
-        // Separate spheres along collision line
         delta.normalize();
         a.position.addScaledVector(delta, overlap/2);
         b.position.addScaledVector(delta, -overlap/2);
-
-        // Simple elastic bounce
-        const relativeVelocity = new THREE.Vector3().subVectors(a.velocity, b.velocity);
+        const relativeVelocity = new THREE.Vector3().subVectors(a.velocity,b.velocity);
         const impactSpeed = relativeVelocity.dot(delta);
         if(impactSpeed<0){
             const impulse = delta.multiplyScalar(impactSpeed);
@@ -133,7 +128,7 @@ function resolveCollision(a, b, radiusSum){
 function animate(){
     requestAnimationFrame(animate);
 
-    // WASD movement
+    // Player movement
     const dir = new THREE.Vector3();
     if(keys['w']) dir.z -=1;
     if(keys['s']) dir.z +=1;
@@ -149,12 +144,12 @@ function animate(){
     player.position.y += velocityY;
     if(player.position.y<playerRadius){ player.position.y = playerRadius; velocityY=0; }
 
-    // Update player position
+    // Update player
     player.position.add(player.velocity);
 
-    // Enemy AI
+    // Enemy AI: move toward player
     for(let e of enemies){
-        const toPlayer = new THREE.Vector3().subVectors(player.position, e.position);
+        const toPlayer = new THREE.Vector3().subVectors(player.position,e.position);
         toPlayer.y=0;
         if(toPlayer.length()>0.1){
             toPlayer.normalize().multiplyScalar(0.2);
@@ -165,16 +160,14 @@ function animate(){
     }
 
     // Collision resolution
-    // Player vs enemies
     for(let e of enemies) resolveCollision(player,e,playerRadius+enemyRadius);
-    // Enemy vs enemy
     for(let i=0;i<enemies.length;i++){
         for(let j=i+1;j<enemies.length;j++){
             resolveCollision(enemies[i],enemies[j],enemyRadius*2);
         }
     }
 
-    // Keep player/enemies inside platform
+    // Keep spheres inside platform
     const half = platformSize/2 - playerRadius;
     player.position.x = Math.max(-half, Math.min(half, player.position.x));
     player.position.z = Math.max(-half, Math.min(half, player.position.z));
