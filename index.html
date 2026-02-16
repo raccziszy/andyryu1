@@ -11,6 +11,7 @@
             overflow: hidden; background-color: black;
         }
 
+        /* The shaker-box now contains ALL elements and the background */
         #shaker-box {
             width: 100vw; height: 100vh;
             background-image: url('andyvid.gif'), url('andyside.jpg'), url('andyside.jpg');
@@ -19,7 +20,8 @@
             background-size: contain, auto 100%, auto 100%;
             position: relative;
             transition: transform 0.02s linear;
-            filter: url(#chromatic-aberration);
+            /* Applies effect to EVERYTHING inside */
+            filter: url(#chromatic-aberration); 
         }
 
         @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -48,25 +50,21 @@
 </head>
 <body>
 
-    <!-- Fixed SVG Filter for Subtle Edge Aberration -->
+    <!-- SVG Filter for Global Chromatic Aberration -->
     <svg style="position: absolute; width: 0; height: 0;">
       <filter id="chromatic-aberration">
-        <!-- Separate the channels -->
         <feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r"/>
         <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
         <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="b"/>
-        
-        <!-- Subtle offsets for the red and blue -->
-        <feOffset id="red-offset" in="r" dx="1" dy="0" result="r-shifted"/>
-        <feOffset id="blue-offset" in="b" dx="-1" dy="0" result="b-shifted"/>
-        
-        <!-- Recombine with Green as the base to maintain full color -->
+        <feOffset id="red-offset" in="r" dx="2" dy="0" result="r-shifted"/>
+        <feOffset id="blue-offset" in="b" dx="-2" dy="0" result="b-shifted"/>
         <feBlend in="r-shifted" in2="g" mode="screen" result="rg"/>
         <feBlend in="rg" in2="b-shifted" mode="screen"/>
       </filter>
     </svg>
 
     <div id="shaker-box">
+        <!-- These now inherit the parent's filter -->
         <img src="andyspin.jpg" class="andy-1">
         <img src="andyspin2.jpg" class="andy-2">
         <img src="andyspin3.jpg" class="andy-3">
@@ -88,16 +86,16 @@
 
         function startShaking() {
             setInterval(() => {
-                const intensity = 15; // Slightly lowered for cleaner visibility
+                const intensity = 18; 
                 const x = (Math.random() - 0.5) * intensity;
                 const y = (Math.random() - 0.5) * intensity;
                 shaker.style.transform = `translate(${x}px, ${y}px)`;
 
-                // Subtle edge split: only 2-4 pixels of offset max
-                const split = (Math.random() * 3) + 1;
+                // Dynamic color split intensity
+                const split = (Math.random() * 5) + 1;
                 rOff.setAttribute('dx', split);
                 bOff.setAttribute('dx', -split);
-            }, 50); 
+            }, 45); 
         }
 
         async function forceFullscreen() {
